@@ -1,8 +1,16 @@
 (ns lt.plugins.user
   (:require [lt.object :as object]
             [lt.objs.tabs :as tabs]
-            [lt.objs.command :as cmd])
+            [lt.objs.command :as cmd]
+            [lt.util.load :as load])
   (:require-macros [lt.macros :refer [defui behavior]]))
+
+
+(comment
+  (def io (load/node_module "socket.io/node_modules/socket.io-client"))
+
+  )
+
 
 ;; UI to be associated with an object
 (defui hello-panel [this]

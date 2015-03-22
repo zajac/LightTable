@@ -10,7 +10,7 @@
   (:use [lt.util.js :only [wait ->clj]])
   (:require-macros [lt.macros :refer [behavior]]))
 
-(def port 0)
+(def port 8023)
 (def sockets (atom {}))
 (def io (load/node-module "socket.io"))
 (def net (js/require "net"))
@@ -44,6 +44,8 @@
   (object/raise clients/clients :message (js->clj data :keywordize-keys true)))
 
 (defn on-connect [socket]
+  (.log js/console "on-connect: " socket)
+
   (.on socket "result" #(on-result socket %))
   (.on socket "init" (partial store-client! socket)))
 
@@ -54,18 +56,18 @@
 
 (def server
   (try
-    (let [ ws (.listen io 0)]
-      (.set ws "log level" 1)
-      (.on (.-server ws) "listening" #(do
-                                        (set! port (.-port (.address (.-server ws))))
-                                        ))
-      (.add (aget ws "static") "/lighttable/ws.js" (clj->js {:file (files/lt-home "core/node_modules/lighttable/ws.js")}))
-      (.on (.-sockets ws) "connection" on-connect)
+    (let [ ws (io port)]
+      (.log js/console "server creation")
+      (.on ws "connection" on-connect)
+      (.on ws "error" #((.log js/console "server error " %)))
+      (.path ws (files/lt-home "core/node_modules"))
       ws)
     ;;TODO: warn the user that they're not connected to anything
     (catch js/Error e
+      (.log js/console e (.-stack e))
       )
     (catch js/global.Error e
+      (.log js/console e (.-stack e))
       )))
 
 (behavior ::kill-on-closed
