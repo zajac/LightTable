@@ -44,8 +44,6 @@
   (object/raise clients/clients :message (js->clj data :keywordize-keys true)))
 
 (defn on-connect [socket]
-  (.log js/console "on-connect: " socket)
-
   (.on socket "result" #(on-result socket %))
   (.on socket "init" (partial store-client! socket)))
 
@@ -57,7 +55,6 @@
 (def server
   (try
     (let [ ws (io port)]
-      (.log js/console "server creation")
       (.on ws "connection" on-connect)
       (.on ws "error" #((.log js/console "server error " %)))
       (.path ws (files/lt-home "core/node_modules"))
