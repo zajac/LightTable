@@ -1,0 +1,3 @@
+[submodule "deploy/plugins/upsource"]
+	path = deploy/plugins/upsource
+	url = git@github.com:zajac/LT-Upsource.git
