@@ -17,7 +17,6 @@
                    [lt.macros :refer [behavior defui]]))
 
 (def shell (load/node-module "shelljs"))
-(def fs (js/require "fs"))
 (def fs-path (js/require "path"))
 (def zlib (js/require "zlib"))
 (def request (load/node-module "request"))
@@ -74,7 +73,7 @@
 (defn download-file [from to cb]
   (let [options (js-obj "url" from
                         "headers" (js-obj "User-Agent" "Light Table"))
-        out (.createWriteStream fs to)]
+        out (files/write-stream to)]
     (when-let [proxy (or js/process.env.http_proxy js/process.env.https_proxy)]
       (set! (.-proxy options) proxy))
     (.pipe (request options cb) out)))
@@ -86,7 +85,7 @@
                                                                (cb e r body)))))
 
 (defn untar [from to cb]
-  (let [t (.createReadStream fs from)]
+  (let [t (files/read-stream from)]
     (.. t
         (pipe (.createGunzip zlib))
         (pipe (.Extract tar (js-obj "path" to)))

@@ -367,3 +367,18 @@
             neue (filterv func (full-path-ls cur))]
         (recur (concat (rest to-walk) (dirs cur)) (concat found neue))))))
 
+(defn unwatch [path alert]
+  (.unwatchFile fs path alert))
+
+(defn watch [path options alert]
+  (.watchFile fs path options alert))
+
+(defn stat [path]
+  (.statSync fs path))
+
+(defn write-stream [path]
+  (.createWriteStream fs path))
+
+(defn read-stream [path]
+  (.createReadStream fs path))
+

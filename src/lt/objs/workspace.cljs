@@ -16,7 +16,7 @@
 ;; TODO: The way I did this is awful. Should get cleaned up
 ;;*********************************************************
 
-(def fs (js/require "fs"))
+
 (def max-depth 10)
 (def watch-interval 1000)
 
@@ -49,7 +49,7 @@
 
 (defn alert-file [path]
   (fn [cur prev]
-    (if (.existsSync fs path)
+    (if (files/exists? path)
       (do
         (object/raise current-ws :watched.update path cur))
       (do
@@ -61,7 +61,7 @@
     {:path path
      :alert alert
      :close (fn []
-              (.unwatchFile fs path alert))}))
+              (files/unwatch path alert))}))
 
 (declare folder->watch)
 
@@ -81,7 +81,7 @@
                watch (folder->watch path)]
            (when-not (get (:watches @current-ws) path)
              (assoc! results path watch)
-             (.watchFile fs path (js-obj "interval" watch-interval
+             (files/watch path (js-obj "interval" watch-interval
                                          "persistent" false)
                          (:alert watch)))
            (when (> recursive? -1)
@@ -90,7 +90,7 @@
                     (not (get results path)))
            (let [watch (file->watch path)]
              (assoc! results path watch)
-             (.watchFile fs path (js-obj "interval" watch-interval
+             (files/watch path (js-obj "interval" watch-interval
                                          "persistent" false)
                          (:alert watch)))))))
      (when-not (number? recursive?)
@@ -98,7 +98,7 @@
 
 (defn alert-folder [path]
   (fn [cur prev]
-    (if (.existsSync fs path)
+    (if (files/exists? path)
       (do
         (let [watches (:watches @current-ws)
               neue (first (filter #(and (not (get watches %))
@@ -106,7 +106,7 @@
                                   (files/full-path-ls path)))]
           (when neue
             (watch! neue)
-            (object/raise current-ws :watched.create neue (.statSync fs neue)))))
+            (object/raise current-ws :watched.create neue (files/stat neue)))))
       (do
         (unwatch! path :recursive)
         (object/raise current-ws :watched.delete path)))))
@@ -116,7 +116,7 @@
      {:path path
       :alert alert
       :close (fn []
-              (.unwatchFile fs path alert))}))
+              (files/unwatch path alert))}))
 
 (defn stop-watching [ws]
   (unwatch! (keys (:watches @ws))))
