@@ -6,9 +6,7 @@
             [lt.util.js :refer [now]])
   (:require-macros [lt.macros :refer [behavior]]))
 
-(def fs (js/require "fs"))
 (def fpath (js/require "path"))
-(def wrench (load/node-module "wrench"))
 (def os (js/require "os"))
 (def app (.-App (js/require "nw.gui")))
 (def data-path (let [path (.-dataPath app)]
@@ -128,27 +126,46 @@
       (not n) "\r\n"
       :else "\n")))
 
-(defn exists? [path]
+(defn absolute? [path]
+  (boolean (re-seq #"^[\\\/]|([\w]+:[\\\/])" path)))
+
+;; --------------------------VFS-----------------------
+
+(def fs (js/require "fs"))
+(def wrench (load/node-module "wrench"))
+
+(defn fs-for-path [path]
+  (let [filesystem (when path (first (filter (fn [fs] ((@fs :accept) fs path))
+                                             (object/by-tag :filesystem))))]
+    (if filesystem (@filesystem :fs-type) :local)))
+
+;; (defn fs-for-path [path]
+;;       :local)
+
+(defmulti exists? fs-for-path)
+(defmethod exists? :local [path]
   (.existsSync fs path))
 
-(defn stats [path]
+
+(defmulti stats fs-for-path)
+(defmethod stats :local [path]
   (when (exists? path)
     (.statSync fs path)))
 
-(defn dir? [path]
+(defmulti dir? fs-for-path)
+(defmethod dir? :local [path]
   (when (exists? path)
     (let [stat (.statSync fs path)]
       (.isDirectory stat))))
 
-(defn file? [path]
+(defmulti file? fs-for-path)
+(defmethod file? :local [path]
   (when (exists? path)
     (let [stat (.statSync fs path)]
       (.isFile stat))))
 
-(defn absolute? [path]
-  (boolean (re-seq #"^[\\\/]|([\w]+:[\\\/])" path)))
-
-(defn writable? [path]
+(defmulti writable? fs-for-path)
+(defmethod writable? :local [path]
   (let [perm (-> (.statSync fs path)
                  (.mode.toString 8)
                  (js/parseInt 10)
@@ -156,20 +173,86 @@
         perm (subs perm (- (count perm) 3))]
     (#{"7" "6" "3" "2"} (first perm))))
 
-(defn resolve [base cur]
+(defmulti resolve (fn [base cur] (fs-for-path base)))
+(defmethod resolve :local [base cur]
   (.resolve fpath base cur))
 
-(defn real-path [c]
+(defmulti real-path fs-for-path)
+(defmethod real-path :local [c]
   (.realpathSync fs c))
+
+(defmulti bomless-read fs-for-path)
+(defmethod bomless-read :local [path]
+  (let [content (.readFileSync fs path "utf-8")]
+    (string/replace content "\uFEFF" "")))
+
+(defmulti write-file (fn [path content] (fs-for-path path)))
+(defmethod write-file :local [path content]
+  (.writeFileSync fs path content))
+
+(defmulti append-file (fn [path content] (fs-for-path path)))
+(defmethod append-file :local [path content]
+  (.appendFileSync fs path content))
+
+(defmulti delete! fs-for-path)
+(defmethod delete! :local [path]
+  (if (dir? path)
+    (.rmdirSyncRecursive wrench path)
+    (.unlinkSync fs path)))
+
+(declare save)
+(declare open-sync)
+
+(defmulti move! (fn [from to] (fs-for-path from)))
+(defmethod move! :local [from to]
+  (if (dir? from)
+    (do
+      (.copyDirSyncRecursive wrench from to)
+      (.rmdirSyncRecursive wrench from))
+    (do
+      (save to (:content (open-sync from)))
+      (delete! from))))
+
+(defmulti copy (fn[from to] (fs-for-path from)))
+(defmethod copy :local [from to]
+  (if (dir? from)
+    (.copyDirSyncRecursive wrench from to)
+    (save to (:content (open-sync from)))))
+
+(defmulti mkdir fs-for-path)
+(defmethod mkdir :local [path]
+  (.mkdirSync fs path))
+
+(defmulti unwatch (fn [path alert] (fs-for-path path)))
+(defmethod unwatch :local [path alert]
+  (.unwatchFile fs path alert))
+
+(defmulti watch (fn [path options alert] (fs-for-path path)))
+(defmethod watch :local [path options alert]
+  (.watchFile fs path options alert))
+
+(defmulti stat fs-for-path)
+(defmethod stat :local [path]
+  (.statSync fs path))
+
+(defmulti write-stream fs-for-path)
+(defmethod write-stream :local [path]
+  (.createWriteStream fs path))
+
+(defmulti read-stream fs-for-path)
+(defmethod read-stream :local [path]
+  (.createReadStream fs path))
+
+(defmulti read-dir fs-for-path)
+(defmethod read-dir :local [path]
+  (.readdirSync fs path))
+
+;; --------------------------VFS-----------------------
 
 (defn ->file|dir [path f]
   (if (dir? (str path separator f))
     (str f separator)
     (str f)))
-
-(defn bomless-read [path]
-  (let [content (.readFileSync fs path "utf-8")]
-    (string/replace content "\uFEFF" "")))
 
 (defn open [path cb]
   (try
@@ -211,7 +294,7 @@
 
 (defn save [path content & [cb]]
   (try
-    (.writeFileSync fs path content)
+    (write-file path content)
     (object/raise files-obj :files.save path)
     (when cb (cb))
     (catch js/global.Error e
@@ -225,7 +308,7 @@
 
 (defn append [path content & [cb]]
   (try
-    (.appendFileSync fs path content)
+    (append-file path content)
     (object/raise files-obj :files.save path)
     (when cb (cb))
     (catch js/global.Error e
@@ -236,28 +319,6 @@
       (object/raise files-obj :files.save.error path e)
       (when cb (cb e))
       )))
-
-(defn delete! [path]
-  (if (dir? path)
-    (.rmdirSyncRecursive wrench path)
-    (.unlinkSync fs path)))
-
-(defn move! [from to]
-  (if (dir? from)
-    (do
-      (.copyDirSyncRecursive wrench from to)
-      (.rmdirSyncRecursive wrench from))
-    (do
-      (save to (:content (open-sync from)))
-      (delete! from))))
-
-(defn copy [from to]
-  (if (dir? from)
-    (.copyDirSyncRecursive wrench from to)
-    (save to (:content (open-sync from)))))
-
-(defn mkdir [path]
-  (.mkdirSync fs path))
 
 (defn parent [path]
 	(.dirname fpath path))
@@ -278,7 +339,7 @@
   ([path] (ls path nil))
   ([path cb]
    (try
-     (let [fs (map (partial ->file|dir path) (.readdirSync fs path))]
+     (let [fs (map (partial ->file|dir path) (read-dir path))]
        (if cb
          (cb fs)
          fs))
@@ -289,7 +350,7 @@
 
 (defn ls-sync [path opts]
   (try
-    (let [fs (remove #(re-seq ignore-pattern %) (map (partial ->file|dir path) (.readdirSync fs path)))]
+    (let [fs (remove #(re-seq ignore-pattern %) (map (partial ->file|dir path) (read-dir path)))]
       (cond
        (:files opts) (filter #(file? (join path %)) fs)
        (:dirs opts) (filter #(dir? (join path %)) fs)
@@ -299,7 +360,7 @@
 
 (defn full-path-ls [path]
   (try
-    (doall (map (partial join path) (.readdirSync fs path)))
+    (doall (map (partial join path) (read-dir path)))
     (catch js/Error e
       (js/lt.objs.console.error e))
     (catch js/global.Error e
@@ -307,7 +368,7 @@
 
 (defn dirs [path]
   (try
-    (filter dir? (map (partial join path) (.readdirSync fs path)))
+    (filter dir? (map (partial join path) (read-dir path)))
     (catch js/Error e)
     (catch js/global.Error e)))
 
@@ -367,18 +428,4 @@
             neue (filterv func (full-path-ls cur))]
         (recur (concat (rest to-walk) (dirs cur)) (concat found neue))))))
 
-(defn unwatch [path alert]
-  (.unwatchFile fs path alert))
-
-(defn watch [path options alert]
-  (.watchFile fs path options alert))
-
-(defn stat [path]
-  (.statSync fs path))
-
-(defn write-stream [path]
-  (.createWriteStream fs path))
-
-(defn read-stream [path]
-  (.createReadStream fs path))
 
