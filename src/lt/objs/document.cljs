@@ -165,7 +165,9 @@
 
 (defn check-mtime [prev updated]
   (if prev
-    (= (.getTime (.-mtime prev)) (.getTime (.-mtime updated)))
+    (if (map? prev)
+      (= (prev "mtime") (updated "mtime"))
+      (= (.getTime (.-mtime prev)) (.getTime (.-mtime updated))))
     true))
 
 (defui button [label & [cb]]
