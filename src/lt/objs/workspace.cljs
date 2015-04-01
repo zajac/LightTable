@@ -101,12 +101,12 @@
     (if (files/exists? path)
       (do
         (let [watches (:watches @current-ws)
-              neue (first (filter #(and (not (get watches %))
+              neue (filter #(and (not (get watches %))
                                         (not (re-seq files/ignore-pattern %)))
-                                  (files/full-path-ls path)))]
-          (when neue
-            (watch! neue)
-            (object/raise current-ws :watched.create neue (files/stat neue)))))
+                                  (files/full-path-ls path))]
+          (doseq [n neue]
+            (object/raise current-ws :watched.create n (files/stat n)))
+          ))
       (do
         (unwatch! path :recursive)
         (object/raise current-ws :watched.delete path)))))
