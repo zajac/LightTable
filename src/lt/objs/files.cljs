@@ -247,6 +247,10 @@
 (defmethod read-dir :local [path]
   (.readdirSync fs path))
 
+(defmulti bomless-read-async (fn [path cb] (fs-for-path path)))
+(defmethod bomless-read-async :local [path cb]
+  (cb (bomless-read path)))
+
 ;; --------------------------VFS-----------------------
 
 (defn ->file|dir [path f]
@@ -256,22 +260,20 @@
 
 (defn open [path cb]
   (try
-    (let [content (bomless-read path)]
-      ;;TODO: error handling
-      (when content
-        (let [e (ext path)]
-          (cb {:content content
-               :line-ending (determine-line-ending content)
-               :type (or (path->mode path) e)})
-          (object/raise files-obj :files.open content))
-        ))
+    (bomless-read-async path (fn [content]
+                               (when content
+                                 (let [e (ext path)]
+                                   (cb {:content content
+                                        :line-ending (determine-line-ending content)
+                                        :type (or (path->mode path) e)})
+                                   (object/raise files-obj :files.open content))
+                                 )))
     (catch js/Error e
-      (object/raise files-obj :files.open.error path e)
-      (when cb (cb nil e)))
+      (object/raise files-obj :files.open.error path)
+      nil)
     (catch js/global.Error e
-      (object/raise files-obj :files.open.error path e)
-      (when cb (cb nil e)))
-    ))
+      (object/raise files-obj :files.open.error path)
+      nil)))
 
 (defn open-sync [path]
   (try
