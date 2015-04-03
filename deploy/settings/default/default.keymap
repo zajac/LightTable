@@ -10,6 +10,7 @@
  [:app "pmeta-shift-=" :window.zoom-in]
  [:app "pmeta-r" :refresh-connected-browser]
  [:app "f11" :window.fullscreen]
+ [:editor "pmeta-b" :go-to-declaration]
 
  [:browser "pmeta-l" :browser.url-bar.focus]
 

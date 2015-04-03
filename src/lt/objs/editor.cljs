@@ -143,6 +143,9 @@
 (defn pos->index [e pos]
   (.indexFromPos (->cm-ed e) (clj->js pos)))
 
+(defn index->pos [e index]
+  (.posFromIndex (->cm-ed e) index))
+
 (defn mark [e from to opts]
   (.markText (->cm-ed e) (clj->js from) (clj->js to) (clj->js opts)))
 

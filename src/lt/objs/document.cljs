@@ -29,7 +29,8 @@
                 :sub-docs #{::this}
                 :tags #{:document}
                 :init (fn [this info]
-                        (object/merge! this (merge (dissoc info :content) {:doc (or (:doc info) (create* info))}))
+                        (object/merge! this (merge (dissoc info :content) {:doc (or (:doc info) (create* info))
+                                                                           :path (:path info)}))
                         nil))
 
 
@@ -81,6 +82,7 @@
 (defn create-sub
   ([doc] (create-sub doc nil))
   ([doc info]
+   (println "create-sub")
    (let [info (merge default-linked-doc-options info)
          neue (create (merge (select-keys @doc doc-keys)
                              info
@@ -150,7 +152,8 @@
                      (let [d (create {:content (:content data)
                                       :line-ending (:line-ending data)
                                       :mtime (files/stats path)
-                                      :mime (:type data)})]
+                                      :mime (:type data)
+                                      :path path})]
                        (register-doc d path)
                        (when cb
                          (cb d)))))
