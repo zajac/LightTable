@@ -134,9 +134,12 @@
 (def fs (js/require "fs"))
 (def wrench (load/node-module "wrench"))
 
+(defn fs-for-path* [path]
+   (when path (first (filter (fn [fs] ((@fs :accept) fs path))
+                                              (object/by-tag :filesystem)))))
+
 (defn fs-for-path [path]
-  (let [filesystem (when path (first (filter (fn [fs] ((@fs :accept) fs path))
-                                             (object/by-tag :filesystem))))]
+  (let [filesystem (fs-for-path* path)]
     (if filesystem (@filesystem :fs-type) :local)))
 
 ;; (defn fs-for-path [path]
@@ -429,5 +432,3 @@
       (let [cur (first to-walk)
             neue (filterv func (full-path-ls cur))]
         (recur (concat (rest to-walk) (dirs cur)) (concat found neue))))))
-
-
